@@ -208,8 +208,14 @@ void run() {
             case 10: {
                 if (inserting == 1) {
                     move(y + 1, 0);
+                    if (y != MAX_STRING_COUNT) {
+                        cur_line++;
+                        if (y == y_max - 2) {
+                            scroll_text(DOWN);
+                            display_content(y, x, DOWN);
+                        }
+                    }
                     content[cur_line - 1][x] = '\n';
-                    if (y != MAX_STRING_COUNT) cur_line++;
                 }
             } break;
             default: {
