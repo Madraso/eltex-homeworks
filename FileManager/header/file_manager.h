@@ -4,6 +4,7 @@
 #include <ncurses.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <locale.h>
 #include <stdlib.h>
@@ -11,11 +12,14 @@
 #include <malloc.h>
 #include <dirent.h>
 
-struct filelist {
+enum direction { UP = -1, DOWN = 1, ALL = 0 };
+typedef struct working_wnd working_wnd;
+
+struct working_wnd {
     struct dirent **namelist;
     WINDOW *wnd;
-    int scrl_border[2];
-    int file_ptr;
+    WINDOW *subwnd;
+    int file_num;
     int entry_cnt;
     unsigned char pwd[FILENAME_MAX];
     unsigned char change_dir;
@@ -23,16 +27,17 @@ struct filelist {
 };
 
 int filter_names(const struct dirent *);
-int cmp_names(const void *, const void *);
+void color_print(WINDOW *, char *, int);
 void init_screen();
-void init_windows(struct filelist *[]);
-void read_dir(struct filelist *);
-void define_file_types(struct filelist *, int);
-void string_shift(char *);
-struct stat get_file_stat(struct filelist *, int);
-void get_next_dir(struct filelist *, char *);
-void print_top_line(struct filelist *);
-void print_file_inf(struct filelist *, int);
+void init_windows(struct working_wnd *[]);
+struct stat get_file_stat(struct working_wnd *, int);
+void get_next_dir(struct working_wnd *, char *);
+void draw_ext_window(struct working_wnd *);
+void draw_int_window(struct working_wnd *);
+void draw_pointer(struct working_wnd *);
+void print_all_files(struct working_wnd *);
+int define_file_type(struct working_wnd *, int);
+void print_file(struct working_wnd *, int);
 void run();
 
 #endif

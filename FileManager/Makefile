@@ -17,12 +17,12 @@ LDFLAGS := -lncursesw
 all: $(BIN)
 
 clean:
-		rm -rf ./obj $(BIN)
+		rm -rf $(OBJ_DIR) $(BIN)
 
-$(BIN): $(_OBJ)
+$(BIN): $(OBJ)
 		$(CC) $(OBJ) -o $(BIN) $(CFLAGS) $(LDFLAGS)
 
-$(_OBJ): $(SRC)
+$(OBJ): $(SRC)
 		$(CC) -c $(SRC)
-		if [ ! -d "obj" ]; then mkdir obj; fi
-		mv *.o ./obj
+		if [ ! -d "$(OBJ_DIR)" ]; then mkdir $(OBJ_DIR); fi
+		mv $(_OBJ) $(OBJ_DIR)
