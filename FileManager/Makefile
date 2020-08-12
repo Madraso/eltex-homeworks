@@ -10,7 +10,7 @@ BIN := file_manager
 
 CC := gcc
 CFLAGS := -g
-LDFLAGS := -lncursesw
+LDFLAGS := -lncursesw -lpthread
 
 .PHONY: all clean
 

@@ -1,4 +1,4 @@
-#include "../header/file_manager.h"
+#include "../include/manager.h"
 
 int main() {
     run();
