@@ -1,3 +1,4 @@
+#include "../include/struct.h"
 #include "../include/server.h"
 
 int client[CL_CNT], buf, serv;
@@ -85,7 +86,7 @@ void *hdl_serv_keys(void *args) {
                 for (int i = 0; i < cl_cnt; i++) msgctl(client[i], IPC_RMID, NULL);
                 if (buf != -1) msgctl(buf, IPC_RMID, NULL);
                 if (serv != -1) msgctl(serv, IPC_RMID, NULL);
-                exit(-1);
+                exit(0);
             } break;
         }
     }

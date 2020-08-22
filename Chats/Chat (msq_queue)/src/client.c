@@ -1,3 +1,4 @@
+#include "../include/struct.h"
 #include "../include/client.h"
 
 WINDOW *box_1, *chat, *box_2,
@@ -64,7 +65,7 @@ void exit_client() {
     delwin(message);
     delwin(users);
     endwin();
-    exit(-1);
+    exit(0);
 }
 
 void get_queues_id() {
