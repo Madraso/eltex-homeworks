@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 #include <locale.h>
 #include <unistd.h>
+#include <getopt.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -15,14 +17,53 @@ void check_value(int val, const char *mes) {
     }
 }
 
-int main() {
+void hdl_args(struct sockaddr_in *endpoint, int argc, char* argv[]) {
+    int symbol, entry_cnt = 0;
+
+    while ((symbol = getopt(argc, argv, "a:p:")) != -1) {
+        int index = 0;
+
+        entry_cnt++;
+
+        if (optarg != NULL) {
+            while (optarg[index++] == ' ') optarg++;
+        }
+
+        switch (symbol) {
+            case 'a': {
+                struct hostent *host = gethostbyname(optarg);
+                if (host == NULL) {
+                    herror("gethostbyname");
+                    exit(-1);
+                }
+                struct in_addr *addr = (struct in_addr *) host->h_addr_list[0];
+                endpoint->sin_addr.s_addr = addr->s_addr;
+            } break;
+            case 'p': {
+                endpoint->sin_port = htons(atoi(optarg));
+            } break;
+            case '?': {
+                exit(-1);
+            } break;
+        }
+    }
+
+    if (entry_cnt < 2) {
+        printf("Не указан адрес или порт\n");
+        exit(-1);
+    }
+}
+
+int main(int argc, char* argv[]) {
     system("clear");
     setlocale(LC_ALL, "");
 
     struct sockaddr_in server, client;
+    memset(&server, 0, sizeof(struct sockaddr_in));
+
     server.sin_family = AF_INET;
-    server.sin_addr.s_addr = inet_addr("127.0.0.1");
-    server.sin_port = htons(8080);
+
+    hdl_args(&server, argc, argv);
 
     int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
     check_value(sock_fd, "socket");
