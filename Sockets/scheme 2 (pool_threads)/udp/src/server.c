@@ -49,6 +49,9 @@ void *hdl_input(void *args) {
         if (strlen(buffer) == 0) continue;
         if (strcmp(buffer, "/exit") == 0) {
             close(*serv_fd);
+            for (int i = 0; i < THREAD_CNT; i++) {
+                close(th_args[i].sock_fd);
+            }
             pthread_mutex_destroy(&mutex);
             exit(0);
         }
