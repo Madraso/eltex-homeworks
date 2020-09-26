@@ -6,7 +6,7 @@ OBJ_DIR = ./obj
 _OBJ := $(_SRC:.c=.o)
 OBJ := $(patsubst %,$(OBJ_DIR)/%,$(_OBJ))
 
-BIN := raw_sock_client
+BIN := raw_sniffer
 
 CC := gcc
 CFLAGS := -g

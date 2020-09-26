@@ -1,8 +1,5 @@
 #include "../include/defines.h"
 
-char *ip;
-int port;
-
 void check_value(int val, const char *msg) {
     if (val < 0) {
         perror(msg);
@@ -10,83 +7,117 @@ void check_value(int val, const char *msg) {
     }
 }
 
-void hdl_args(struct sockaddr_in *endpoint, int argc, char* argv[]) {
-    int symbol, entry_cnt = 0;
-
-    while ((symbol = getopt(argc, argv, "a:p:")) != -1) {
-        int index = 0;
-
-        entry_cnt++;
-
-        if (optarg != NULL) {
-            while (optarg[index++] == ' ') optarg++;
-        }
-
-        switch (symbol) {
-            case 'a': {
-                struct hostent *host = gethostbyname(optarg);
-                ip = optarg;
-                if (host == NULL) {
-                    herror("gethostbyname");
-                    exit(-1);
-                }
-                struct in_addr *addr = (struct in_addr *) host->h_addr_list[0];
-                endpoint->sin_addr.s_addr = addr->s_addr;
-            } break;
-            case 'p': {
-                endpoint->sin_port = htons(atoi(optarg));
-                port = atoi(optarg);
-            } break;
-            case '?': {
-                exit(-1);
-            } break;
-        }
+void get_eth_hdr(struct ethhdr *eth_hdr, struct ifreq ifr) {
+    for (int i = 0; i < 6; i++) {
+        eth_hdr->h_dest[i] = dest_mac[i];
+        eth_hdr->h_source[i] = (unsigned char)
+            ifr.ifr_ifru.ifru_hwaddr.sa_data[i];
     }
+    eth_hdr->h_proto = htons(ETH_P_IP);
+}
 
-    if (entry_cnt < 2) {
-        printf("Не указан адрес или порт\n");
-        exit(-1);
+void get_ip_hdr(struct iphdr *ip_hdr, struct ifreq ifr) {
+    ip_hdr->version = 4;
+    ip_hdr->ihl = 5;
+    ip_hdr->tos = 0;
+    ip_hdr->id = 1;
+    ip_hdr->frag_off = 0;
+    ip_hdr->protocol = 17;
+    ip_hdr->ttl = IPDEFTTL;
+    ip_hdr->check = 0;
+    ip_hdr->saddr = inet_addr(
+        inet_ntoa(((struct sockaddr_in *) &ifr.ifr_ifru.ifru_addr)->sin_addr));
+    ip_hdr->daddr = inet_addr(DEST_IP);
+}
+
+void get_udp_hdr(struct udphdr *udp_hdr) {
+    udp_hdr->source = htons(SRC_PORT);
+    udp_hdr->dest = htons(DEST_PORT);
+    udp_hdr->check = 0;
+}
+
+uint16_t crc16(struct iphdr *ip_hdr) {
+    int check_sum = 0;
+    unsigned short *ptr = (unsigned short *) ip_hdr;
+    for (int i = 0; i < 10; i++) {
+        check_sum += *(ptr)++;
     }
+    int tmp = check_sum >> 16;
+    check_sum = (check_sum & 0xFFFF) + tmp;
+    return (uint16_t) ~check_sum;
 }
 
 int main(int argc, char* argv[]) {
     system("clear");
     setlocale(LC_ALL, "");
 
-    struct sockaddr_in server;
-    memset(&server, 0, sizeof(struct sockaddr_in));
+    struct sockaddr_ll eth_server;
+    struct sockaddr_in ip_server;
 
-    server.sin_family = AF_INET;
+    eth_server.sll_family = AF_PACKET;
+    eth_server.sll_ifindex = if_nametoindex("enp0s3");
+    eth_server.sll_halen = 6;
+    for (int i = 0; i < 6; i++) eth_server.sll_addr[i] = dest_mac[i];
 
-    hdl_args(&server, argc, argv);
+    ip_server.sin_family = AF_INET;
+    ip_server.sin_addr.s_addr = inet_addr(DEST_IP);
+    ip_server.sin_port = htons(DEST_PORT);
 
-    int sock_fd = socket(AF_INET, SOCK_RAW, IPPROTO_UDP);
+    int sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     check_value(sock_fd, "socket");
     printf("RAW сокет успешно создан\n\n");
 
-    int iphdr_size = sizeof(struct iphdr), udphdr_size = sizeof(struct udphdr);
-    int serv_st_size = sizeof(server);
-    
-    char buf_snd[udphdr_size + BUF_LEN],
-        buf_rcv[udphdr_size + iphdr_size + BUF_LEN];
-    
-    char *buf_in = buf_snd + udphdr_size;
-    strcpy(buf_in, "Hello!");
+    struct ifreq ifr_mac, ifr_ip;
+    memset(&ifr_mac, 0, sizeof(ifr_mac));
+    memset(&ifr_ip, 0, sizeof(ifr_ip));
+    strncpy(ifr_mac.ifr_name, "enp0s3", IFNAMSIZ - 1);
+    strncpy(ifr_ip.ifr_name, "enp0s3", IFNAMSIZ - 1);
 
-    struct udphdr *udp_hdr = (struct udphdr *) buf_snd;
-    udp_hdr->source = htons(port + 1000);
-    udp_hdr->dest = htons(port);
-    udp_hdr->len = htons(udphdr_size + strlen(buf_in));
-    udp_hdr->check = htons(0);
-    
-    sendto(sock_fd, buf_snd, udp_hdr->len, 0, (struct sockaddr *) &server, serv_st_size);
-    printf("Клиент отправил сообщение: %s\n", buf_in);
+    int ioctl_val = ioctl(sock_fd, SIOCGIFHWADDR, &ifr_mac);
+    check_value(ioctl_val, "ioctl");
 
-    int cnt_msg = 0;
+    ioctl_val = ioctl(sock_fd, SIOCGIFADDR, &ifr_ip);
+    check_value(ioctl_val, "ioctl");
+
+    int ethhdr_size = sizeof(struct ethhdr),
+        iphdr_size = sizeof(struct iphdr), udphdr_size = sizeof(struct udphdr);
+
+    unsigned char buf_in[MTU - ethhdr_size - iphdr_size - udphdr_size],
+        buf_snd[MTU], buf_rcv[MTU];
+
+    memset(buf_snd, 0, sizeof(buf_snd));
+
+    struct ethhdr *eth_hdr = (struct ethhdr *) buf_snd;
+    struct iphdr *ip_hdr = (struct iphdr *) (buf_snd + ethhdr_size);
+    struct udphdr *udp_hdr = (struct udphdr *) (buf_snd + ethhdr_size + iphdr_size);
+    
+    get_eth_hdr(eth_hdr, ifr_mac);
+    get_ip_hdr(ip_hdr, ifr_ip);
+    get_udp_hdr(udp_hdr);
+
+    memset(buf_in, 0, sizeof(buf_in));
+    printf("$ ");
+    fgets(buf_in, sizeof(buf_in), stdin);
+    buf_in[strlen(buf_in) - 1] = 0;
+
+    int packet_size = ethhdr_size + iphdr_size + udphdr_size;
+    memcpy(buf_snd + packet_size, buf_in, strlen(buf_in));
+    packet_size += strlen(buf_in);
+
+    ip_hdr->tot_len = htons(packet_size - ethhdr_size);
+    udp_hdr->len = htons(packet_size - ethhdr_size - iphdr_size);
+    ip_hdr->check = crc16(ip_hdr);
+
+    sendto(sock_fd, buf_snd, packet_size, 0, (const struct sockaddr *) &eth_server, sizeof(eth_server));
+
+    int serv_st_size = sizeof(ip_server);
     while (1) {
-        recvfrom(sock_fd, buf_rcv, sizeof(buf_rcv), 0, (struct sockaddr *) &server, &serv_st_size);
-        printf("Сервер прислал сообщение: %s\n\n", buf_rcv + iphdr_size + udphdr_size);
-        if (++cnt_msg == 2) break;
+        recvfrom(sock_fd, buf_rcv, sizeof(buf_rcv), 0, (struct sockaddr *) &ip_server, &serv_st_size);
+        struct udphdr *rcv_udp_hdr = (struct udphdr *) (buf_rcv + ethhdr_size + iphdr_size);
+        if (rcv_udp_hdr->source = DEST_PORT) {
+            printf("Сервер прислал сообщение: %s\n\n", buf_rcv + ethhdr_size + iphdr_size + udphdr_size);
+            break;
+        }
     }
 
     return 0;
