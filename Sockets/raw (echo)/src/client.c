@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
     while (1) {
         recvfrom(sock_fd, buf_rcv, sizeof(buf_rcv), 0, (struct sockaddr *) &ip_server, &serv_st_size);
         struct udphdr *rcv_udp_hdr = (struct udphdr *) (buf_rcv + ethhdr_size + iphdr_size);
-        if (rcv_udp_hdr->source = DEST_PORT) {
+        if (ntohs(rcv_udp_hdr->source) == DEST_PORT) {
             printf("Сервер прислал сообщение: %s\n\n", buf_rcv + ethhdr_size + iphdr_size + udphdr_size);
             break;
         }
